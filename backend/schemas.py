@@ -3,7 +3,7 @@ from decimal import Decimal
 from datetime import datetime
 from typing import List
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 # ---------- Image Schemas ----------
@@ -38,7 +38,8 @@ class AnimalImageLinkRead(AnimalImageLinkBase):
 # ---------- Animal Schemas ----------
 
 class AnimalBase(BaseModel):
-    animal_name: str
+    model_config = ConfigDict(str_strip_whitespace=True)
+    animal_name: str = Field(min_length=1, max_length=100)
 
 
 class AnimalCreate(AnimalBase):
@@ -52,7 +53,8 @@ class AnimalRead(AnimalBase):
     model_config = ConfigDict(from_attributes=True)
 
 class AnimalUpdate(BaseModel):
-    animal_name: str | None = None
+    model_config = ConfigDict(str_strip_whitespace=True)
+    animal_name: str | None = Field(default=None, min_length=1, max_length=100)
 
 
 # ---------- Tour-Animal Link Schemas ----------
@@ -86,9 +88,10 @@ class TourImageLinkRead(TourImageLinkBase):
 # ---------- Tour Schemas ----------
 
 class TourBase(BaseModel):
-    tour_name: str
+    model_config = ConfigDict(str_strip_whitespace=True)
+    tour_name: str = Field(min_length=1, max_length=200)
     tour_desc: str | None = None
-    tour_price: Decimal = Field(..., description="Tour price in RM")
+    tour_price: Decimal = Field(..., ge=0, max_digits=10, decimal_places=2, description="Tour price in RM")
 
 
 class TourCreate(TourBase):
@@ -109,16 +112,19 @@ class TourRead(BaseModel):
 
 
 class TourUpdate(BaseModel):
-    tour_name: str | None = None
+    model_config = ConfigDict(str_strip_whitespace=True)
+    animals: list[TourAnimalLinkBase] | None = None
+    tour_name: str | None = Field(default=None, min_length=1, max_length=200)
     tour_desc: str | None = None
-    tour_price: Decimal | None = None
+    tour_price: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=2)
 
 
 # ---------- Contact Messages ----------
 
 class ContactMessageCreate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
     name: str = Field(..., min_length=1, max_length=100)
-    email: str = Field(..., min_length=3, max_length=254)
+    email: str = Field(..., min_length=3, max_length=254, pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
     phone: str | None = Field(default=None, max_length=30)
     subject: str = Field(..., min_length=1, max_length=200)
     message: str = Field(..., min_length=10, max_length=5000)

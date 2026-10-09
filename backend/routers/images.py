@@ -15,9 +15,9 @@ from auth import get_current_admin
 router = APIRouter(prefix="/images", tags=["images"])
 
 # Where to store uploaded images (same as in main.py)
-BASE_DIR = Path(__file__).resolve().parent.parent
-UPLOAD_DIR = BASE_DIR / "uploaded_images"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+from settings import UPLOAD_DIR
+from uploads import save_image
+
 
 
 @router.post("/upload", response_model=ImageRead)
@@ -26,25 +26,7 @@ async def upload_image(
     db: Session = Depends(get_db),
     admin: None = Depends(get_current_admin),  # 🔒 admin-only
 ):
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="Uploaded file has no filename.")
-
-    original_name = file.filename
-    _, ext = os.path.splitext(original_name)
-    ext = ext.lower()
-    allowed_exts = {".jpg", ".jpeg", ".png", ".webp"}
-    if ext not in allowed_exts:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file type: {ext}. Allowed: {', '.join(allowed_exts)}",
-        )
-
-    unique_name = f"{uuid4().hex}{ext}"
-    save_path = UPLOAD_DIR / unique_name
-
-    content = await file.read()
-    with save_path.open("wb") as buffer:
-        buffer.write(content)
+    unique_name = await save_image(file)
 
     db_image = models.Image(file_name=unique_name)
     db.add(db_image)
@@ -82,7 +64,7 @@ def delete_image(
     tour_links = db.query(models.TourImage).filter_by(image_id=image_id).count()
     animal_links = db.query(models.AnimalImage).filter_by(image_id=image_id).count()
 
-    if tour_links > 0 or animal_links > 0:
+    if tour_links > 0 or animal_links > 0 or db.query(models.Tour).filter_by(cover_image_id=image_id).count() > 0:
         raise HTTPException(
             status_code=400,
             detail="Cannot delete image: it is still linked to a tour or animal. Remove links first.",

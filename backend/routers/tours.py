@@ -26,9 +26,9 @@ from auth import get_current_admin
 
 router = APIRouter(prefix="/tours", tags=["tours"])
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-UPLOAD_DIR = BASE_DIR / "uploaded_images"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+from settings import UPLOAD_DIR
+from uploads import save_image
+
 
 
 # ---------- Tours ----------
@@ -130,10 +130,27 @@ def update_tour(
 
     if tour.tour_name is not None:
         db_tour.tour_name = tour.tour_name
-    if tour.tour_desc is not None:
+    if "tour_desc" in tour.model_fields_set:
         db_tour.tour_desc = tour.tour_desc
     if tour.tour_price is not None:
         db_tour.tour_price = tour.tour_price
+
+    if tour.animals is not None:
+        animal_ids = [item.animal_id for item in tour.animals]
+        if len(animal_ids) != len(set(animal_ids)):
+            raise HTTPException(422, "Each animal can only be linked once.")
+        found = db.query(models.Animal).filter(models.Animal.animal_id.in_(animal_ids)).count()
+        if found != len(animal_ids):
+            raise HTTPException(404, "One of the animals no longer exists.")
+        existing = {link.animal_id: link for link in db_tour.animals}
+        for link in list(db_tour.animals):
+            if link.animal_id not in animal_ids:
+                db_tour.animals.remove(link)
+        for item in tour.animals:
+            if item.animal_id in existing:
+                existing[item.animal_id].sighting_probability = item.sighting_probability
+            else:
+                db_tour.animals.append(models.TourAnimal(animal_id=item.animal_id, sighting_probability=item.sighting_probability))
 
     db.commit()
     db.refresh(db_tour)
@@ -298,6 +315,8 @@ def remove_image_from_tour(
             detail="This image is not linked to the tour.",
         )
 
+    if tour.cover_image_id == image_id:
+        tour.cover_image_id = next((item.image_id for item in tour.images if item.image_id != image_id), None)
     db.delete(link)
     db.commit()
     db.refresh(tour)
@@ -318,6 +337,8 @@ def set_cover_image(
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
 
+    if not db.query(models.TourImage).filter_by(tour_id=tour_id, image_id=image_id).first():
+        raise HTTPException(400, "Choose an image attached to this tour.")
     tour.cover_image_id = image_id
     db.commit()
     db.refresh(tour)
@@ -334,20 +355,7 @@ async def upload_image_to_tour(
     if not tour:
         raise HTTPException(status_code=404, detail="Tour not found")
 
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No filename provided")
-
-    _, ext = os.path.splitext(file.filename)
-    ext = ext.lower()
-
-    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
-        raise HTTPException(status_code=400, detail="Unsupported image format")
-
-    unique_name = f"{uuid4().hex}{ext}"
-    path = UPLOAD_DIR / unique_name
-
-    content = await file.read()
-    path.write_bytes(content)
+    unique_name = await save_image(file)
 
     image = models.Image(file_name=unique_name)
     db.add(image)

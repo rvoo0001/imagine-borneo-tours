@@ -33,3 +33,9 @@ def create_contact_message(
     except SQLAlchemyError:
         db.rollback()
         raise HTTPException(status_code=503, detail="Messages are temporarily unavailable.")
+
+from auth import get_current_admin
+
+@router.get("/messages", response_model=list[ContactMessageRead])
+def list_contact_messages(db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    return db.query(models.ContactMessage).order_by(models.ContactMessage.created_at.desc(), models.ContactMessage.message_id.desc()).limit(500).all()

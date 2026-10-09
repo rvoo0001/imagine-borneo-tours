@@ -1,39 +1,32 @@
-from pathlib import Path
-
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles  # ✅ add this
-
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
 from database import engine
+from settings import ALLOWED_ORIGINS, UPLOAD_DIR
 import models
-from routers import animals, tours, images, admin, contact
+from routers import animals, tours, images, admin, contact, content
 
-models.Base.metadata.create_all(bind=engine)
+@asynccontextmanager
+async def lifespan(app):
+    models.Base.metadata.create_all(bind=engine)
+    yield
 
-app = FastAPI(title="Imagine Borneo Tours API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ✅ Static image serving
-BASE_DIR = Path(__file__).resolve().parent
-UPLOAD_DIR = BASE_DIR / "uploaded_images"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-# ✅ This is the missing line
+app = FastAPI(title="Imagine Borneo Tours API", lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_credentials=True, allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"], allow_headers=["Content-Type", "Authorization"])
 app.mount("/static/images", StaticFiles(directory=str(UPLOAD_DIR)), name="images")
+for router in (animals.router, tours.router, images.router, admin.router, contact.router, content.router):
+    app.include_router(router)
 
-# Routers
-app.include_router(animals.router)
-app.include_router(tours.router)
-app.include_router(images.router)
-app.include_router(admin.router)
-app.include_router(contact.router)
+@app.exception_handler(IntegrityError)
+async def integrity_error(request: Request, error: IntegrityError):
+    return JSONResponse(status_code=409, content={"detail": "This name already exists or the record is still in use."})
+
+@app.get("/health")
+def health():
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+    return {"status": "ok"}

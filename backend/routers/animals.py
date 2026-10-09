@@ -20,9 +20,9 @@ from auth import get_current_admin
 
 router = APIRouter(prefix="/animals", tags=["animals"])
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-UPLOAD_DIR = BASE_DIR / "uploaded_images"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+from settings import UPLOAD_DIR
+from uploads import save_image
+
 
 # ---------- Animals ----------
 
@@ -186,24 +186,7 @@ async def upload_image_to_animal(
     if not animal:
         raise HTTPException(status_code=404, detail="Animal not found")
 
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="Uploaded file has no filename.")
-
-    _, ext = os.path.splitext(file.filename)
-    ext = ext.lower()
-
-    allowed_exts = {".jpg", ".jpeg", ".png", ".webp"}
-    if ext not in allowed_exts:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file type: {ext}. Allowed: {', '.join(sorted(allowed_exts))}",
-        )
-
-    unique_name = f"{uuid4().hex}{ext}"
-    save_path = UPLOAD_DIR / unique_name
-
-    content = await file.read()
-    save_path.write_bytes(content)
+    unique_name = await save_image(file)
 
     image = models.Image(file_name=unique_name)
     db.add(image)

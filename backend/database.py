@@ -1,24 +1,16 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base, Session
-from typing import Generator
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker, declarative_base
+from settings import DATABASE_URL
 
-from dotenv import load_dotenv
-import os
-from pathlib import Path
-
-load_dotenv(Path(__file__).with_name(".env"))
-URL_DATABASE = os.environ["DATABASE_URL"]
-
-engine = create_engine(URL_DATABASE)
-
+URL_DATABASE = DATABASE_URL
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {})
+if DATABASE_URL.startswith("sqlite"):
+    @event.listens_for(engine, "connect")
+    def sqlite_foreign_keys(connection, _):
+        connection.execute("PRAGMA foreign_keys=ON")
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 Base = declarative_base()
 
-
-def get_db() -> Generator[Session, None, None]:
-    db = SessionLocal()
-    try:
+def get_db():
+    with SessionLocal() as db:
         yield db
-    finally:
-        db.close()

@@ -1,29 +1,21 @@
-from fastapi import Depends, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import os
+from fastapi import HTTPException, Request
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from settings import SESSION_SECRET, SESSION_MAX_AGE, COOKIE_NAME, ALLOWED_ORIGINS
 
+serializer = URLSafeTimedSerializer(SESSION_SECRET, salt="ibt-admin-v1")
 
-from dotenv import load_dotenv
-from pathlib import Path
-
-load_dotenv(Path(__file__).with_name(".env"))
-ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
-ADMIN_TOKEN = os.environ["ADMIN_TOKEN"]
-
-security = HTTPBearer()
-
-
-def get_current_admin(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> None:
-    raw_token = credentials.credentials or ""
-
-    # Be forgiving: strip spaces and an accidental "Bearer " prefix
-    token = raw_token.strip()
-    if token.startswith("Bearer "):
-        token = token[len("Bearer "):].strip()
-
-    if token != ADMIN_TOKEN:
-        # temporary debug – you can remove these prints later
-        raise HTTPException(status_code=401, detail="Not authorised as admin")
-    
+def get_current_admin(request: Request):
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        raise HTTPException(401, "Please sign in to continue.")
+    try:
+        payload = serializer.loads(token, max_age=SESSION_MAX_AGE)
+        if payload.get("role") != "admin":
+            raise BadSignature("Invalid role")
+    except (BadSignature, SignatureExpired):
+        raise HTTPException(401, "Your session expired. Please sign in again.")
+    if request.method not in {"GET", "HEAD", "OPTIONS"}:
+        origin = request.headers.get("origin")
+        if origin and origin not in ALLOWED_ORIGINS:
+            raise HTTPException(403, "Request origin is not allowed.")
+    return payload

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, String, Text, Float, Numeric, ForeignKey, Integer, func
+from sqlalchemy import DateTime, String, Text, Float, Numeric, ForeignKey, Integer, JSON, func
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from database import Base
@@ -15,8 +15,8 @@ class Animal(Base):
     animal_id: Mapped[int] = mapped_column(primary_key=True, index=True)
     animal_name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
 
-    tours: Mapped[list["TourAnimal"]] = relationship(back_populates="animal")
-    images: Mapped[list["AnimalImage"]] = relationship(back_populates="animal")
+    tours: Mapped[list["TourAnimal"]] = relationship(back_populates="animal", cascade="all, delete-orphan")
+    images: Mapped[list["AnimalImage"]] = relationship(back_populates="animal", cascade="all, delete-orphan")
 
 
 class Tour(Base):
@@ -34,8 +34,8 @@ class Tour(Base):
 
     cover_image: Mapped["Image"] = relationship(foreign_keys=[cover_image_id])
 
-    animals: Mapped[list["TourAnimal"]] = relationship(back_populates="tour")
-    images: Mapped[list["TourImage"]] = relationship(back_populates="tour")
+    animals: Mapped[list["TourAnimal"]] = relationship(back_populates="tour", cascade="all, delete-orphan")
+    images: Mapped[list["TourImage"]] = relationship(back_populates="tour", cascade="all, delete-orphan")
 
 
 class TourAnimal(Base):
@@ -109,3 +109,9 @@ class ContactMessage(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+class SiteContent(Base):
+    __tablename__ = "site_content"
+    content_id: Mapped[int] = mapped_column(primary_key=True)
+    values: Mapped[dict] = mapped_column(JSON, default=dict)
+    version: Mapped[int] = mapped_column(Integer, default=0)
