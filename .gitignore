@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+env/
+venv/
+.venv/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite*
+*.log
+coverage/
+.pytest_cache/
+.ruff_cache/
+test-results/
+playwright-report/
+backend/uploaded_images/
+.vscode/
+.cta.json
+.cursorrules
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+
+# Build
+dist/
+build/
+.legacy-frontend-git/
